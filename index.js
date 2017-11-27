@@ -1,6 +1,5 @@
 var fs     = require('fs-extra');
 var path   = require('path');
-var xml2js = require('xml2js');
 var ig     = require('imagemagick');
 var colors = require('colors');
 var _      = require('underscore');
@@ -11,7 +10,7 @@ var argv   = require('minimist')(process.argv.slice(2));
  * @var {Object} settings - names of the config file and of the splash image
  */
 var settings = {};
-settings.CONFIG_FILE = argv.config || 'config.xml';
+settings.PROJECT_NAME = argv.project || 'projectName';
 settings.SPLASH_FILE = argv.splash || 'splash.png';
 settings.OLD_XCODE_PATH = argv['xcode-old'] || false;
 
@@ -21,7 +20,8 @@ settings.OLD_XCODE_PATH = argv['xcode-old'] || false;
  * @param  {String} projectName
  * @return {Promise} resolves with an array of platforms
  */
-var getPlatforms = function (projectName) {
+var getPlatforms = function () {
+  var projectName = settings.PROJECT_NAME;
   var deferred = Q.defer();
   var platforms = [];
   var xcodeFolder = '/Images.xcassets/LaunchImage.launchimage/';
@@ -33,8 +33,8 @@ var getPlatforms = function (projectName) {
   platforms.push({
     name : 'ios',
     // TODO: use async fs.exists
-    isAdded : fs.existsSync('platforms/ios'),
-    splashPath : 'platforms/ios/' + projectName + xcodeFolder,
+    isAdded : fs.existsSync('ios'),
+    splashPath : 'ios/' + projectName + xcodeFolder,
     splash : [
       // iPhone
       { name: 'Default~iphone.png',            width: 320,  height: 480  },
@@ -54,8 +54,8 @@ var getPlatforms = function (projectName) {
   });
   platforms.push({
     name : 'android',
-    isAdded : fs.existsSync('platforms/android'),
-    splashPath : 'platforms/android/res/',
+    isAdded : fs.existsSync('android'),
+    splashPath : 'android/res/',
     splash : [
       // Landscape
       { name: 'drawable-land-ldpi/screen.png',  width: 320,  height: 200  },
@@ -73,25 +73,7 @@ var getPlatforms = function (projectName) {
       { name: 'drawable-port-xxxhdpi/screen.png', width: 1280, height: 1920  }
     ]
   });
-  platforms.push({
-    name : 'windows',
-    isAdded : fs.existsSync('platforms/windows'),
-    splashPath : 'platforms/windows/images/',
-    splash : [
-      // Landscape
-      { name: 'SplashScreen.scale-100.png', width: 620,  height: 300  },
-      { name: 'SplashScreen.scale-125.png', width: 775,  height: 375  },
-      { name: 'SplashScreen.scale-140.png', width: 868,  height: 420  },
-      { name: 'SplashScreen.scale-150.png', width: 930,  height: 450  },
-      { name: 'SplashScreen.scale-180.png', width: 1116,  height: 540  },
-      { name: 'SplashScreen.scale-200.png', width: 1240, height: 600  },
-      { name: 'SplashScreen.scale-400.png', width: 2480, height: 1200 },
-      // Portrait
-      { name: 'SplashScreenPhone.scale-240.png', width: 1152,  height: 1920  },
-      { name: 'SplashScreenPhone.scale-140.png', width: 672,  height: 1120  },
-      { name: 'SplashScreenPhone.scale-100.png', width: 480,  height: 800  }
-    ]
-  });
+
   deferred.resolve(platforms);
   return deferred.promise;
 };
@@ -114,28 +96,7 @@ display.header = function (str) {
   console.log('');
 };
 
-/**
- * read the config file and get the project name
- *
- * @return {Promise} resolves to a string - the project's name
- */
-var getProjectName = function () {
-  var deferred = Q.defer();
-  var parser = new xml2js.Parser();
-  fs.readFile(settings.CONFIG_FILE, function (err, data) {
-    if (err) {
-      deferred.reject(err);
-    }
-    parser.parseString(data, function (err, result) {
-      if (err) {
-        deferred.reject(err);
-      }
-      var projectName = result.widget.name[0];
-      deferred.resolve(projectName);
-    });
-  });
-  return deferred.promise;
-};
+
 
 /**
  * Crops and creates a new splash in the platform's folder.
@@ -261,31 +222,11 @@ var validSplashExists = function () {
   return deferred.promise;
 };
 
-/**
- * Checks if a config.xml file exists
- *
- * @return {Promise} resolves if exists, rejects otherwise
- */
-var configFileExists = function () {
-  var deferred = Q.defer();
-  fs.exists(settings.CONFIG_FILE, function (exists) {
-    if (exists) {
-      display.success(settings.CONFIG_FILE + ' exists');
-      deferred.resolve();
-    } else {
-      display.error('cordova\'s ' + settings.CONFIG_FILE + ' does not exist');
-      deferred.reject();
-    }
-  });
-  return deferred.promise;
-};
 
 display.header('Checking Project & Splash');
 
 atLeastOnePlatformFound()
 .then(validSplashExists)
-.then(configFileExists)
-.then(getProjectName)
 .then(getPlatforms)
 .then(generateSplashes)
 .catch(function (err) {
